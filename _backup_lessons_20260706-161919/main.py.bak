@@ -1,0 +1,1116 @@
+"""
+Web Agent Local — FastAPI Backend
+Bài thực hành: AI Agents for Beginners (Tiếng Việt)
+
+Backend cung cấp:
+- GET  /                        → Phục vụ giao diện Learning Hub (index.html)
+- POST /chat                    → Gửi tin nhắn và nhận phản hồi từ Gemini (streaming)
+- POST /reset                   → Xóa lịch sử hội thoại
+- GET  /api/system_status       → Trạng thái hệ thống Agent (Tree-view)
+- GET  /api/lessons             → Danh sách 24 bài học theo 5 Modules
+- GET  /api/lessons/{slug}      → Nội dung HTML của một bài học cụ thể
+- GET  /api/lessons/{slug}/summary → Bản tóm tắt dễ hiểu (AI) của bài học
+- GET  /api/lessons/{slug}/mindmap → Sơ đồ tư duy (Mermaid) của bài học
+"""
+
+import os
+import re
+import json
+import asyncio
+from pathlib import Path
+from typing import AsyncGenerator
+from sse_starlette.sse import EventSourceResponse
+import markdown
+import hashlib
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# ── Import Skill Registry (Bài 14) ────────────────────────────────────────
+from skills import SKILL_REGISTRY, ORCHESTRATOR_TOOLS, ALL_FUNCTIONS
+from hooks import hook_manager
+from guardrails import check_input_safety
+
+# ── Cấu hình ──────────────────────────────────────────────────────────────────
+
+load_dotenv(override=True)
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL   = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+# Tự nâng cấp nếu cấu hình còn trỏ tới model đã bị Google ngừng phục vụ
+_RETIRED_MODELS = {"gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"}
+if GEMINI_MODEL in _RETIRED_MODELS:
+    print(f"[CANH BAO] Model '{GEMINI_MODEL}' da ngung -> tu chuyen sang 'gemini-2.5-flash'.")
+    GEMINI_MODEL = "gemini-2.5-flash"
+
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "❌ Thiếu GEMINI_API_KEY. Vui lòng tạo file .env và điền API key.\n"
+        "   Lấy key miễn phí tại: https://aistudio.google.com/apikey"
+    )
+
+genai.configure(api_key=GEMINI_API_KEY)
+
+# ── System Prompt (Nhân cách mặc định của Agent) ───────────────────────────────
+
+def get_dynamic_system_prompt(lesson_slug: str | None = None):
+    """
+    [Bài 17: Context Assembly + Sprint 5: Lesson-Aware Context]
+    Hệ thống Lắp ráp Ngữ cảnh (Context Builder).
+    Thu thập và lắp ráp các khối thông tin (Core Persona, Workspace Handbook, Memory,
+    + Lesson Context nếu người dùng đang đọc bài) thành một Master Prompt duy nhất.
+    """
+    # 1. CORE PERSONA (Căn cước của Agent)
+    core_persona = f"""Bạn là một Orchestrator Agent (Người điều phối) thông minh. Bạn không tự thực hiện các tác vụ mà chỉ giao việc cho các Sub-agent bằng tool `delegate_task`.
+Danh sách các kỹ năng hiện có: {list(SKILL_REGISTRY.keys())}
+"""
+
+    # 2. WORKSPACE CONTEXT HANDBOOK (Đọc từ AGENTS.md - Bài 16)
+    workspace_handbook = ""
+    handbook_path = os.path.join(os.path.dirname(__file__), "AGENTS.md")
+    if os.path.exists(handbook_path):
+        with open(handbook_path, "r", encoding="utf-8") as f:
+            workspace_handbook = f.read()
+
+    # 3. LONG-TERM MEMORY (Bài 08)
+    long_term_memory = ""
+    memory_path = os.path.join(os.path.dirname(__file__), "data", "long_term_memory.json")
+    if os.path.exists(memory_path):
+        with open(memory_path, "r", encoding="utf-8") as f:
+            memory_data = f.read()
+            if memory_data.strip() != "{}":
+                long_term_memory = memory_data
+
+    # 4. LESSON CONTEXT (Sprint 5: Lesson-Aware)
+    lesson_context = ""
+    if lesson_slug:
+        lesson_context = _build_lesson_context(lesson_slug)
+
+    # 5. LẮP RÁP (ASSEMBLY) THÀNH MASTER PROMPT
+    master_prompt = f"{core_persona}\n"
+    if workspace_handbook:
+        master_prompt += f"--- BẮT ĐẦU SỔ TAY NGỮ CẢNH (AGENTS.md) ---\n{workspace_handbook}\n--- KẾT THÚC SỔ TAY NGỮ CẢNH ---\n\n"
+    if long_term_memory:
+        master_prompt += f"--- BỘ NHỚ DÀI HẠN VỀ NGƯỜI DÙNG ---\nHãy sử dụng những thông tin sau để cá nhân hóa câu trả lời: {long_term_memory}\n\n"
+    if lesson_context:
+        master_prompt += lesson_context
+        
+    return master_prompt
+
+def _build_lesson_context(lesson_slug: str) -> str:
+    """
+    [Sprint 5] Xây dựng ngữ cảnh bài học hiện tại để inject vào System Prompt.
+    Trích xuất: tiêu đề, module, tóm tắt 500 ký tự đầu, danh sách heading.
+    """
+    readme_path = LESSONS_VI_DIR / lesson_slug / "README.md"
+    if not readme_path.exists():
+        return ""
+    
+    title = _slug_to_title(lesson_slug)
+    
+    # Tìm Module
+    module_name = "Chưa xác định"
+    for mod in COURSE_MODULES:
+        if lesson_slug in mod["lessons"]:
+            module_name = mod["title"]
+            break
+    
+    # Đọc nội dung, trích heading + tóm tắt
+    with open(readme_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+    
+    # Xóa thumbnail
+    md_content = _clean_youtube_thumbnail(md_content)
+    
+    # Trích heading H2
+    headings = re.findall(r'^## (.+)$', md_content, re.MULTILINE)
+    headings_str = ", ".join(headings[:8]) if headings else "Không có"
+    
+    # Tóm tắt: 500 ký tự đầu tiên (sau heading H1)
+    lines = [l for l in md_content.split("\n") if l.strip() and not l.startswith("#") and not l.startswith("[")]
+    summary = " ".join(lines)[:500].strip()
+    
+    return f"""--- NGỮ CẢNH BÀI HỌC HIỆN TẠI (Lesson-Aware Context) ---
+Người dùng đang đọc bài: "{title}" (Module: {module_name})
+Slug: {lesson_slug}
+Các phần chính: {headings_str}
+Tóm tắt nội dung: {summary}...
+
+HƯỚNG DẪN: Khi người dùng hỏi về nội dung bài giảng, hãy trả lời dựa trên ngữ cảnh bài học này.
+Nếu câu hỏi kèm trích dẫn ("Giải thích đoạn sau..."), hãy giải thích chi tiết đoạn đó theo ngữ cảnh bài.
+Luôn liên hệ với thực tiễn và ví dụ cụ thể từ hệ thống Web Agent hiện tại nếu phù hợp.
+--- KẾT THÚC NGỮ CẢNH BÀI HỌC ---\n\n"""
+
+DEFAULT_SYSTEM_PROMPT = get_dynamic_system_prompt()
+
+
+# ── Judge Agent Prompt (Bài 21) ─────────────────────────────────────────────
+JUDGE_PROMPT = """Bạn là một Giám khảo AI chuyên nghiệp (LLM-as-a-Judge) làm việc tại Sconnect.
+Nhiệm vụ của bạn là đánh giá chất lượng câu trả lời của Hệ thống Agent đối với câu hỏi của người dùng.
+Hãy chấm điểm từ 1 đến 10 dựa trên:
+1. Độ chính xác và Hữu ích.
+2. Sự an toàn (Không chứa nội dung độc hại).
+3. Rõ ràng và dễ hiểu.
+
+BẠN BẮT BUỘC PHẢI TRẢ VỀ ĐÚNG ĐỊNH DẠNG JSON SAU (không format markdown, không giải thích thêm ở ngoài JSON):
+{
+  "score": 9,
+  "reason": "Giải thích ngắn gọn lý do tại sao cho điểm này."
+}
+"""
+
+async def evaluate_response(user_message: str, agent_response: str) -> dict:
+    try:
+        judge_model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=JUDGE_PROMPT
+        )
+        
+        prompt = f"User Query: {user_message}\n\nAgent Response: {agent_response}"
+        result = await asyncio.to_thread(judge_model.generate_content, prompt)
+        
+        text = result.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.endswith("```"):
+            text = text[:-3]
+            
+        evaluation = json.loads(text.strip())
+        return evaluation
+    except Exception as e:
+        print(f"Lỗi Judge Agent: {e}")
+        return {"score": 0, "reason": "Không thể đánh giá do lỗi hệ thống."}
+
+# Gán biến global cho model và lịch sử. Main Model chỉ có ORCHESTRATOR_TOOLS
+model = genai.GenerativeModel(
+    model_name=GEMINI_MODEL,
+    system_instruction=DEFAULT_SYSTEM_PROMPT,
+    tools=ORCHESTRATOR_TOOLS
+)
+
+chat_history: list = []
+
+# ── FastAPI App ────────────────────────────────────────────────────────────────
+
+app = FastAPI(title="Web Agent Local", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ── Lesson Content Engine (Sprint 1: Learning Hub) ─────────────────────────────
+
+# Đường dẫn gốc của kho lưu trữ (lùi 2 cấp từ my-practice/web-agent/)
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+LESSONS_VI_DIR = REPO_ROOT / "translations" / "vi"
+TRANSLATED_IMAGES_DIR = REPO_ROOT / "translated_images" / "vi"
+
+# Mount thư mục hình ảnh tĩnh cho bài giảng
+if TRANSLATED_IMAGES_DIR.exists():
+    app.mount("/lessons/images/translated", StaticFiles(directory=str(TRANSLATED_IMAGES_DIR)), name="translated_images")
+
+# Mount thư mục gốc (cho các bài cũ trỏ về ảnh EN gốc)
+if (REPO_ROOT / "images").exists():
+    app.mount("/lessons/images/root", StaticFiles(directory=str(REPO_ROOT / "images")), name="root_images")
+
+# Cấu trúc 5 Modules của khóa học
+COURSE_MODULES = [
+    {
+        "id": 1, "title": "Nhập môn & Nền tảng", "color": "#22c55e", "icon": "🟢",
+        "lessons": ["01-course-setup", "02-intro-to-ai-agents", "03-explore-agentic-frameworks", "04-agentic-design-patterns"]
+    },
+    {
+        "id": 2, "title": "Năng lực cốt lõi của Agent", "color": "#3b82f6", "icon": "🔵",
+        "lessons": ["05-tool-use", "06-agentic-rag", "07-context-engineering", "08-agent-memory", "09-agent-skills", "10-browser-use"]
+    },
+    {
+        "id": 3, "title": "Trí thông minh & Chiến thuật", "color": "#f97316", "icon": "🟠",
+        "lessons": ["11-planning-design", "12-metacognition", "13-multi-agent", "14-agent-orchestration"]
+    },
+    {
+        "id": 4, "title": "Kiến trúc Ngữ cảnh Nâng cao", "color": "#ef4444", "icon": "🔴",
+        "lessons": ["15-context-memory-architecture", "16-workspace-context-handbook", "17-context-assembly-routing"]
+    },
+    {
+        "id": 5, "title": "Bảo mật, Giám sát & Vận hành", "color": "#a855f7", "icon": "🟣",
+        "lessons": ["18-building-trustworthy-agents", "19-securing-ai-agents", "20-agent-lifecycle-hooks", "21-monitoring-evaluation", "22-ai-agents-production", "23-agentic-protocols", "24-microsoft-agent-framework"]
+    }
+]
+
+# Danh sách các bài có Demo Web Agent
+DEMO_LESSONS = {"05-tool-use", "06-agentic-rag", "11-planning-design", "12-metacognition", "14-agent-orchestration", "15-context-memory-architecture", "16-workspace-context-handbook", "17-context-assembly-routing"}
+
+# [ADR-005] Phân tier bài học cho sidebar: 'advanced' = Nâng cao/Đọc thêm (8 bài),
+# còn lại là 'core' = Lộ trình chính (16 bài). Không đổi orchestration.
+ADVANCED_LESSONS = {
+    "15-context-memory-architecture",
+    "17-context-assembly-routing",
+    "19-securing-ai-agents",
+    "20-agent-lifecycle-hooks",
+    "21-monitoring-evaluation",
+    "22-ai-agents-production",
+    "23-agentic-protocols",
+    "24-microsoft-agent-framework",
+}
+
+def _slug_to_title(slug: str) -> str:
+    """Chuyển slug thư mục thành tiêu đề bài học từ README.md hoặc tên thư mục."""
+    readme_path = LESSONS_VI_DIR / slug / "README.md"
+    if readme_path.exists():
+        with open(readme_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("# "):
+                    return line[2:].strip()
+    # Fallback: chuyển slug thành tên dễ đọc
+    parts = slug.split("-", 1)
+    return parts[1].replace("-", " ").title() if len(parts) > 1 else slug
+
+def _rewrite_image_paths(html_content: str, lesson_slug: str) -> str:
+    """
+    Rewrite đường dẫn hình ảnh từ tương đối (Markdown) sang URL tuyệt đối (Web).
+    Hỗ trợ 2 pattern:
+    1. ../../../translated_images/vi/filename.HASH.webp → /lessons/images/translated/filename.HASH.webp
+    2. ../../../NN-lesson/images/filename.png → /lessons/images/lesson/NN-lesson/filename.png
+    """
+    # Pattern 1: Ảnh WebP đã dịch (translated_images/vi/)
+    html_content = re.sub(
+        r'src="[./]*translated_images/vi/([^"]+)"',
+        r'src="/lessons/images/translated/\1"',
+        html_content
+    )
+    # Pattern 2: Ảnh gốc EN (../../../NN-lesson/images/file.png)
+    def _rewrite_original_img(match):
+        full_path = match.group(1)
+        # Tìm phần thư mục bài + tên file (e.g. 13-multi-agent/images/file.png)
+        return f'src="/lessons/images/lesson/{full_path}"'
+    
+    html_content = re.sub(
+        r'src="[./]*(\d{2}-[^"]+/images/[^"]+)"',
+        _rewrite_original_img,
+        html_content
+    )
+    return html_content
+
+def _rewrite_internal_links(html_content: str) -> str:
+    """Rewrite link nội bộ giữa các bài thành lệnh JS điều hướng."""
+    # Pattern: href="../05-tool-use/README.md" hoặc href="./05-tool-use/README.md"
+    def _rewrite_link(match):
+        slug = match.group(1)
+        return f'href="javascript:void(0)" onclick="loadLesson(\'{slug}\')" class="internal-lesson-link"'
+    
+    html_content = re.sub(
+        r'href="[./]*(\d{2}-[^/"]+)/README\.md"',
+        _rewrite_link,
+        html_content
+    )
+    return html_content
+
+def _parse_youtube_thumbnail(md_content: str) -> dict | None:
+    """Trích xuất YouTube video ID từ dòng đầu tiên của bài học (nếu có)."""
+    first_line = md_content.split("\n")[0].strip()
+    yt_match = re.search(r'youtu\.?be[./](?:watch\?v=)?([\w-]+)', first_line)
+    if yt_match:
+        return {"video_id": yt_match.group(1)}
+    return None
+
+# ── Sprint 4: Bộ xử lý nâng cao trải nghiệm đọc ──
+
+def _clean_youtube_thumbnail(md_content: str) -> str:
+    """Xóa dòng YouTube thumbnail + caption khỏi Markdown (tránh trùng iframe embed)."""
+    lines = md_content.split("\n")
+    cleaned = []
+    skip_next_caption = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        # Dòng thumbnail: [![...](image)](https://youtu.be/...)
+        if re.match(r'^\[!\[.*\]\(.*\)\]\(https?://.*youtu\.?be', stripped):
+            skip_next_caption = True
+            continue
+        # Sau dòng thumbnail: skip dòng trống, caption, blockquote caption
+        if skip_next_caption:
+            if stripped == '':
+                continue
+            # Caption dạng: > _(Nhấn/Nhấp vào hình ảnh...)_  hoặc  _(Click on the image...)_
+            caption_keywords = ['Nhấn vào', 'Nhấp vào', 'Click on', 'click on', 'hình ảnh', 'video bài']
+            if any(kw in stripped for kw in caption_keywords):
+                # Nếu là dòng cuối cùng cần skip → reset flag
+                skip_next_caption = False
+                continue
+            # Dòng không khớp → ngưng skip, giữ dòng này
+            skip_next_caption = False
+        cleaned.append(line)
+    return "\n".join(cleaned)
+
+def _parse_github_alerts(html_content: str) -> str:
+    """
+    Parse GitHub-style alerts trong HTML đã render từ blockquote.
+    Input:  <blockquote><p>[!TIP]<br/>Nội dung mẹo.</p></blockquote>
+    Output: <div class="alert alert-tip"><p><strong>💡 Mẹo:</strong> Nội dung mẹo.</p></div>
+    """
+    alert_map = {
+        'TIP':       ('💡', 'Mẹo',       'alert-tip'),
+        'IMPORTANT': ('❗', 'Quan trọng', 'alert-important'),
+        'WARNING':   ('⚠️', 'Cảnh báo',   'alert-warning'),
+        'CAUTION':   ('🔴', 'Chú ý',      'alert-caution'),
+        'NOTE':      ('📝', 'Ghi chú',    'alert-note'),
+    }
+
+    for alert_type, (icon, label, css_class) in alert_map.items():
+        # Pattern: <blockquote>\n<p>[!TYPE]<br/>\ncontent</p>\n</blockquote>
+        pattern = re.compile(
+            r'<blockquote>\s*<p>\[!' + alert_type + r'\]\s*(?:<br\s*/?>)?\s*',
+            re.IGNORECASE
+        )
+        # Thay phần mở
+        html_content = pattern.sub(
+            f'<div class="alert {css_class}"><p><strong>{icon} {label}:</strong> ',
+            html_content
+        )
+
+    # Đóng </blockquote> → </div> cho các alert đã mở
+    # Tìm tất cả các đoạn alert chưa đóng đúng
+    html_content = re.sub(
+        r'(class="alert [^"]*">.*?)</p>\s*</blockquote>',
+        r'\1</p></div>',
+        html_content,
+        flags=re.DOTALL
+    )
+
+    return html_content
+
+def _clean_shield_badges(html_content: str) -> str:
+    """Xóa hình ảnh shields.io badges (không phù hợp hiển thị local)."""
+    # Xóa cả thẻ <a> bọc ngoài badge
+    html_content = re.sub(
+        r'<p>\s*<a[^>]*>\s*<img[^>]*shields\.io[^>]*/>\s*</a>\s*</p>',
+        '',
+        html_content
+    )
+    # Xóa badge đơn lẻ (không bọc <a>)
+    html_content = re.sub(
+        r'<img[^>]*shields\.io[^>]*/?>',
+        '',
+        html_content
+    )
+    return html_content
+
+def _add_external_link_targets(html_content: str) -> str:
+    """Thêm target='_blank' cho external links (trừ internal lesson links và YouTube)."""
+    def _add_target(match):
+        tag = match.group(0)
+        # Bỏ qua nếu đã có target, onclick, hoặc là link nội bộ
+        if 'target=' in tag or 'onclick=' in tag or 'javascript:' in tag:
+            return tag
+        # Thêm target và rel
+        return tag.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ')
+    
+    html_content = re.sub(r'<a\s+href="https?://[^"]*"[^>]*>', _add_target, html_content)
+    return html_content
+
+
+@app.get("/api/lessons")
+async def list_lessons():
+    """Trả về danh sách 24 bài học, nhóm theo 5 Modules."""
+    modules_out = []
+    for mod in COURSE_MODULES:
+        lessons_out = []
+        for slug in mod["lessons"]:
+            lesson_dir = LESSONS_VI_DIR / slug
+            if lesson_dir.exists():
+                num = slug.split("-")[0]
+                lessons_out.append({
+                    "id": num,
+                    "slug": slug,
+                    "title": _slug_to_title(slug),
+                    "has_demo": slug in DEMO_LESSONS,
+                    "tier": "advanced" if slug in ADVANCED_LESSONS else "core"
+                })
+        modules_out.append({
+            "id": mod["id"],
+            "title": mod["title"],
+            "color": mod["color"],
+            "icon": mod["icon"],
+            "lessons": lessons_out
+        })
+    return {"modules": modules_out}
+
+
+@app.get("/api/lessons/{lesson_slug}")
+async def get_lesson(lesson_slug: str):
+    """
+    Trả về nội dung HTML đã render từ Markdown của một bài học.
+    
+    Pipeline xử lý (Sprint 4):
+    1. Đọc Markdown → Trích xuất YouTube ID
+    2. Xóa YouTube thumbnail + caption (tránh trùng iframe)
+    3. Render Markdown → HTML (fenced_code + tables + toc)
+    4. Parse GitHub Alerts ([!TIP], [!IMPORTANT]...)
+    5. Xóa shields.io badges
+    6. Rewrite image paths (translated WebP + EN original)
+    7. Rewrite internal links (→ loadLesson JS)
+    8. Thêm target=_blank cho external links
+    """
+    readme_path = LESSONS_VI_DIR / lesson_slug / "README.md"
+    if not readme_path.exists():
+        raise HTTPException(status_code=404, detail=f"Bài học '{lesson_slug}' không tồn tại.")
+    
+    with open(readme_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+    
+    # ── Step 1: Trích xuất YouTube video ──
+    youtube = _parse_youtube_thumbnail(md_content)
+    
+    # ── Step 2: Xóa YouTube thumbnail + caption khỏi nội dung ──
+    md_content = _clean_youtube_thumbnail(md_content)
+    
+    # Xác định Module ID
+    module_id = None
+    for mod in COURSE_MODULES:
+        if lesson_slug in mod["lessons"]:
+            module_id = mod["id"]
+            break
+    
+    # ── Step 3: Render Markdown → HTML ──
+    # Lưu ý: KHÔNG dùng codehilite (xung đột với highlight.js client-side)
+    #         KHÔNG dùng nl2br (tạo <br/> thừa trong code blocks)
+    html_content = markdown.markdown(
+        md_content,
+        extensions=["tables", "fenced_code", "toc"]
+    )
+    
+    # ── Step 4: Parse GitHub Alerts ──
+    html_content = _parse_github_alerts(html_content)
+    
+    # ── Step 5: Xóa shields.io badges ──
+    html_content = _clean_shield_badges(html_content)
+    
+    # ── Step 6: Rewrite image paths ──
+    html_content = _rewrite_image_paths(html_content, lesson_slug)
+    
+    # ── Step 7: Rewrite internal links ──
+    html_content = _rewrite_internal_links(html_content)
+    
+    # ── Step 8: External links → new tab ──
+    html_content = _add_external_link_targets(html_content)
+    
+    # ── Sprint 5: Tính thời gian đọc ──
+    word_count = len(re.findall(r'\w+', md_content))
+    reading_time = max(1, round(word_count / 200))  # ~200 từ/phút
+    
+    return {
+        "slug": lesson_slug,
+        "title": _slug_to_title(lesson_slug),
+        "content_html": html_content,
+        "module_id": module_id,
+        "has_demo": lesson_slug in DEMO_LESSONS,
+        "youtube": youtube,
+        "reading_time": reading_time,  # Sprint 5
+        "word_count": word_count        # Sprint 5
+    }
+
+
+# ── Sprint 5: Suggested Questions API ──────────────────────────────────────────
+
+# Map bài học → câu hỏi gợi ý (Static, không cần LLM)
+LESSON_SUGGESTIONS = {
+    "01-course-setup": [
+        "Cần cài đặt những gì để bắt đầu khóa học?",
+        "Hướng dẫn tạo API key Gemini miễn phí",
+        "Cấu trúc thư mục dự án như thế nào?"
+    ],
+    "02-intro-to-ai-agents": [
+        "AI Agent khác gì với chatbot thông thường?",
+        "Kiến trúc ReAct hoạt động như thế nào?",
+        "Ví dụ thực tế về AI Agent trong Web Agent này?"
+    ],
+    "03-explore-agentic-frameworks": [
+        "So sánh các framework AI Agent phổ biến hiện nay?",
+        "Tại sao khóa học chọn Gemini API?",
+        "LangChain vs AutoGen vs Crew AI khác gì nhau?"
+    ],
+    "04-agentic-design-patterns": [
+        "Có bao nhiêu Design Pattern cho AI Agent?",
+        "Pattern nào phù hợp cho chatbot doanh nghiệp?",
+        "Orchestrator Pattern hoạt động thế nào trong Web Agent?"
+    ],
+    "05-tool-use": [
+        "Function Calling trong Gemini hoạt động thế nào?",
+        "Cách tạo một Tool mới cho Agent?",
+        "Ví dụ Tool Use trong hệ thống Web Agent hiện tại?"
+    ],
+    "06-agentic-rag": [
+        "RAG khác gì với Fine-tuning?",
+        "Vector Database hoạt động thế nào?",
+        "Cách tích hợp RAG vào Web Agent?"
+    ],
+    "07-context-engineering": [
+        "Context Engineering là gì?",
+        "Cách tối ưu System Prompt cho Agent?",
+        "Context Window ảnh hưởng thế nào đến chất lượng?"
+    ],
+    "08-agent-memory": [
+        "Short-term vs Long-term Memory khác gì?",
+        "Cách Agent lưu trữ và truy xuất ký ức?",
+        "Web Agent hiện tại lưu memory ở đâu?"
+    ],
+    "09-agent-skills": [
+        "Skill Registry hoạt động thế nào?",
+        "Cách đăng ký một Skill mới cho Agent?",
+        "Sub-agent và Skill khác gì nhau?"
+    ],
+    "10-browser-use": [
+        "Agent có thể tự động duyệt web không?",
+        "Browser Use Pattern phù hợp cho trường hợp nào?",
+        "Rủi ro bảo mật khi Agent duyệt web?"
+    ],
+    "11-planning-design": [
+        "Planning trong AI Agent hoạt động thế nào?",
+        "ReAct vs Plan-and-Execute khác gì?",
+        "Web Agent dùng Planning Pattern nào?"
+    ],
+    "12-metacognition": [
+        "Metacognition trong AI Agent là gì?",
+        "Agent tự đánh giá chất lượng bằng cách nào?",
+        "think_aloud tool hoạt động thế nào?"
+    ],
+    "13-multi-agent": [
+        "Multi-Agent khác gì Single Agent?",
+        "Cách các Agent giao tiếp với nhau?",
+        "Delegation Pattern trong Web Agent?"
+    ],
+    "14-agent-orchestration": [
+        "Orchestrator khác gì Router Agent?",
+        "Cách thiết kế hệ thống điều phối hiệu quả?",
+        "Xử lý lỗi trong Multi-Agent như thế nào?"
+    ],
+}
+
+# Gợi ý mặc định cho các bài không có map riêng
+DEFAULT_SUGGESTIONS = [
+    "Tóm tắt nội dung chính của bài này?",
+    "Ví dụ thực tế nào liên quan đến bài học?",
+    "Bài này liên hệ thế nào với Web Agent hiện tại?"
+]
+
+@app.get("/api/lessons/{lesson_slug}/suggestions")
+async def get_lesson_suggestions(lesson_slug: str):
+    """Sprint 5: Trả về câu hỏi gợi ý phù hợp với bài học hiện tại."""
+    suggestions = LESSON_SUGGESTIONS.get(lesson_slug, DEFAULT_SUGGESTIONS)
+    return {
+        "slug": lesson_slug,
+        "suggestions": suggestions
+    }
+
+
+# ── Tóm tắt bài học (Lesson Summary) ────────────────────────────────────────────
+# Mục tiêu: tài liệu bài học khá dài & khó, cần "gói gọn" thành bản dễ hiểu cho
+# người mới. Đọc full Markdown → nhờ Gemini tóm tắt ngắn gọn (TL;DR + ý chính +
+# gợi ý thực hành) → cache theo slug để không gọi lại LLM mỗi lần mở.
+_SUMMARY_CACHE: dict[str, dict] = {}
+
+SUMMARIZER_PROMPT = """Bạn là trợ giảng của Sconnect cho khóa "AI Agents for Beginners".
+Nhiệm vụ: tóm tắt một bài học (đang cho người MỚI HỌC) sao cho DỄ HIỂU, NGẮN GỌN.
+
+Giọng điệu: thân thiện, trẻ trung, đi thẳng vào vấn đề (chuẩn brand Sconnect). Dùng tiếng Việt.
+TUYỆT ĐỐI KHÔNG bịa thông tin ngoài nội dung bài. Không thêm lời chào/kết.
+
+Trả về ĐÚNG định dạng Markdown sau (không bọc trong ```):
+
+**TL;DR:** <1-2 câu nói cốt lõi bài học là gì>
+
+**Ý chính:**
+- <ý 1, mỗi ý 1 dòng, tối đa 6 ý, ngắn gọn>
+- <ý 2>
+
+**Thuật ngữ cần nhớ:** <2-4 thuật ngữ quan trọng, kèm giải thích siêu ngắn; nếu không có thì bỏ dòng này>
+
+**Áp dụng / Thực hành:** <1-2 câu gợi ý người học nên thử gì, liên hệ Web Agent nếu hợp lý>
+"""
+
+
+def _normalize_summary_md(md: str) -> str:
+    """Chèn dòng trống trước danh sách bullet để Markdown render đúng <ul>."""
+    lines = md.split("\n")
+    out: list[str] = []
+    for ln in lines:
+        is_bullet = re.match(r'^\s*[-*] ', ln)
+        if is_bullet and out and out[-1].strip() and not re.match(r'^\s*[-*] ', out[-1]):
+            out.append("")
+        out.append(ln)
+    return "\n".join(out)
+
+
+async def _generate_lesson_summary(lesson_slug: str, md_content: str) -> str:
+    """Gọi Gemini (không tool) sinh bản tóm tắt Markdown cho bài học."""
+    # Giới hạn độ dài đầu vào để tiết kiệm token (đủ để nắm nội dung).
+    clean = _clean_youtube_thumbnail(md_content)
+    clean = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', clean)  # bỏ ảnh
+    body = clean[:12000]
+    title = _slug_to_title(lesson_slug)
+
+    summarizer = genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=SUMMARIZER_PROMPT,
+    )
+    prompt = f"Tên bài: {title}\n\n--- NỘI DUNG BÀI ---\n{body}"
+    result = await asyncio.to_thread(summarizer.generate_content, prompt)
+    return (result.text or "").strip()
+
+
+@app.get("/api/lessons/{lesson_slug}/summary")
+async def get_lesson_summary(lesson_slug: str, refresh: bool = False):
+    """Trả về bản tóm tắt dễ hiểu của bài học (HTML đã render + Markdown gốc)."""
+    readme_path = LESSONS_VI_DIR / lesson_slug / "README.md"
+    if not readme_path.exists():
+        raise HTTPException(status_code=404, detail=f"Bài học '{lesson_slug}' không tồn tại.")
+
+    if not refresh and lesson_slug in _SUMMARY_CACHE:
+        return _SUMMARY_CACHE[lesson_slug]
+
+    with open(readme_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+
+    try:
+        summary_md = await _generate_lesson_summary(lesson_slug, md_content)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Không tạo được tóm tắt: {e}")
+
+    summary_html = markdown.markdown(_normalize_summary_md(summary_md), extensions=["tables"])
+    payload = {
+        "slug": lesson_slug,
+        "title": _slug_to_title(lesson_slug),
+        "summary_md": summary_md,
+        "summary_html": summary_html,
+        "cached": False,
+    }
+    _SUMMARY_CACHE[lesson_slug] = {**payload, "cached": True}
+    return payload
+
+# ── Sơ đồ tư duy (Mind Map) ─────────────────────────────────────────────────────
+# Nhờ Gemini sinh mã Mermaid "mindmap" từ nội dung bài → frontend render bằng Mermaid.
+_MINDMAP_CACHE: dict[str, dict] = {}
+
+MINDMAP_PROMPT = """Bạn là trợ giảng của Sconnect. Hãy tạo SƠ ĐỒ TƯ DUY (mind map) cho một bài học,
+xuất ra bằng cú pháp Mermaid "mindmap".
+
+QUY TẮC BẮT BUỘC (nếu sai, sơ đồ sẽ không hiển thị được):
+- Dòng đầu tiên đúng chữ: mindmap
+- Dòng thứ hai là nút gốc dạng:   root((Tên chủ đề ngắn))
+- Thụt lề bằng KHOẢNG TRẮNG (2 spaces mỗi cấp), tối đa 3 cấp con.
+- Mỗi nhánh là nhãn NGẮN (2-6 từ), chỉ dùng chữ, số và khoảng trắng.
+- TUYỆT ĐỐI KHÔNG dùng ký tự đặc biệt trong nhãn: ( ) [ ] { } : ; , " ' ` # / \\ | dấu chấm.
+- 4-7 nhánh chính, mỗi nhánh 2-4 ý con. Nội dung bám sát bài, tiếng Việt.
+- CHỈ trả về mã Mermaid, KHÔNG bọc trong ``` và KHÔNG thêm lời giải thích.
+
+Ví dụ đúng:
+mindmap
+  root((Chu de chinh))
+    Nhanh mot
+      Y con A
+      Y con B
+    Nhanh hai
+      Y con C
+"""
+
+
+def _clean_mermaid_mindmap(code: str) -> str:
+    """Làm sạch output LLM để chắc chắn là mã mindmap hợp lệ."""
+    code = (code or "").strip()
+    # Bỏ hàng rào ```mermaid ... ```
+    code = re.sub(r'^```[a-zA-Z]*\s*', '', code)
+    code = re.sub(r'\s*```$', '', code).strip()
+    # Bắt đầu từ dòng 'mindmap'
+    idx = code.find("mindmap")
+    if idx > 0:
+        code = code[idx:]
+    if not code.startswith("mindmap"):
+        code = "mindmap\n  root((Bài học))\n    " + code.replace("\n", "\n    ")
+    return code.strip()
+
+
+async def _generate_lesson_mindmap(lesson_slug: str, md_content: str) -> str:
+    clean = _clean_youtube_thumbnail(md_content)
+    clean = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', clean)
+    body = clean[:12000]
+    title = _slug_to_title(lesson_slug)
+    gen = genai.GenerativeModel(model_name=GEMINI_MODEL, system_instruction=MINDMAP_PROMPT)
+    prompt = f"Tên bài: {title}\n\n--- NỘI DUNG BÀI ---\n{body}"
+    result = await asyncio.to_thread(gen.generate_content, prompt)
+    return _clean_mermaid_mindmap(result.text or "")
+
+
+@app.get("/api/lessons/{lesson_slug}/mindmap")
+async def get_lesson_mindmap(lesson_slug: str, refresh: bool = False):
+    """Trả về mã Mermaid mindmap cho bài học (frontend sẽ render)."""
+    readme_path = LESSONS_VI_DIR / lesson_slug / "README.md"
+    if not readme_path.exists():
+        raise HTTPException(status_code=404, detail=f"Bài học '{lesson_slug}' không tồn tại.")
+    if not refresh and lesson_slug in _MINDMAP_CACHE:
+        return _MINDMAP_CACHE[lesson_slug]
+    with open(readme_path, "r", encoding="utf-8") as f:
+        md_content = f.read()
+    try:
+        mermaid_code = await _generate_lesson_mindmap(lesson_slug, md_content)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Không tạo được sơ đồ tư duy: {e}")
+    payload = {"slug": lesson_slug, "title": _slug_to_title(lesson_slug), "mermaid": mermaid_code, "cached": False}
+    _MINDMAP_CACHE[lesson_slug] = {**payload, "cached": True}
+    return payload
+
+
+# Mount phục vụ hình ảnh gốc của từng bài (cho pattern 2)
+# Quét tất cả thư mục bài có thư mục images/
+for lesson_dir in sorted(REPO_ROOT.iterdir()):
+    if lesson_dir.is_dir() and re.match(r'\d{2}-', lesson_dir.name):
+        img_dir = lesson_dir / "images"
+        if img_dir.exists():
+            app.mount(
+                f"/lessons/images/lesson/{lesson_dir.name}/images",
+                StaticFiles(directory=str(img_dir)),
+                name=f"lesson_img_{lesson_dir.name}"
+            )
+
+
+def proto_to_py(obj):
+    """Đệ quy chuyển đổi cấu trúc Protobuf sang list/dict của Python."""
+    obj_type = type(obj).__name__
+    if obj_type == 'RepeatedComposite':
+        return [proto_to_py(v) for v in obj]
+    elif obj_type == 'MapComposite':
+        return {k: proto_to_py(v) for k, v in obj.items()}
+    elif isinstance(obj, dict):
+        return {k: proto_to_py(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [proto_to_py(v) for v in obj]
+    else:
+        return obj
+
+class ChatRequest(BaseModel):
+    message: str
+    system_prompt: str | None = None
+    lesson_slug: str | None = None  # Sprint 5: Lesson-Aware Context
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_ui():
+    """Phục vụ giao diện Chat UI."""
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
+
+
+# ── Hàm chạy Sub-Agent ───────────────────────────────────────────────────────
+async def execute_sub_agent(skill_id: str, task_description: str, async_queue: asyncio.Queue):
+    if skill_id not in SKILL_REGISTRY:
+        return f"Lỗi: Kỹ năng '{skill_id}' không tồn tại."
+        
+    skill_info = SKILL_REGISTRY[skill_id]
+    
+    await async_queue.put(json.dumps({
+        "type": "text", 
+        "content": f"\n\n*(Quản đốc đang gọi Sub-agent: **{skill_info['name']}**...)*\n\n"
+    }))
+    
+    sub_agent = genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=skill_info["prompt"],
+        tools=skill_info["tools"]
+    )
+    
+    hook_manager.on_agent_start(skill_id, task_description)
+    
+    try:
+        sub_chat = sub_agent.start_chat()
+        sub_message = task_description
+        
+        while True:
+            response = await asyncio.to_thread(sub_chat.send_message, sub_message)
+            candidate = response.candidates[0]
+            parts = candidate.content.parts
+            
+            has_function_call = any(hasattr(p, "function_call") and p.function_call.name for p in parts)
+            
+            if has_function_call:
+                function_responses = []
+                for part in parts:
+                    if hasattr(part, "function_call") and part.function_call.name:
+                        fn_name = part.function_call.name
+                        fn_args = proto_to_py(dict(part.function_call.args))
+                        
+                        await async_queue.put(json.dumps({
+                            "type": "tool_call",
+                            "tool": f"[{skill_id}] {fn_name}",
+                            "args": fn_args
+                        }))
+                        
+                        hook_manager.before_tool_call(skill_id, fn_name, fn_args)
+                        
+                        fn_executor = ALL_FUNCTIONS.get(fn_name)
+                        if fn_executor:
+                            result = fn_executor(fn_args)
+                        else:
+                            result = f"Tool '{fn_name}' không tồn tại."
+                            
+                        hook_manager.after_tool_call(skill_id, fn_name, result)
+                            
+                        function_responses.append(
+                            genai.protos.Part(
+                                function_response=genai.protos.FunctionResponse(
+                                    name=fn_name,
+                                    response={"result": result}
+                                )
+                            )
+                        )
+                        
+                        await async_queue.put(json.dumps({
+                            "type": "tool_result",
+                            "tool": f"[{skill_id}] {fn_name}",
+                            "result": result
+                        }))
+                        
+                sub_message = function_responses
+                continue
+            else:
+                final_text = ""
+                for part in parts:
+                    if hasattr(part, "text") and part.text:
+                        final_text += part.text
+                
+                await async_queue.put(json.dumps({
+                    "type": "text", 
+                    "content": f"\n\n*(Sub-agent **{skill_info['name']}** trả về kết quả)*\n\n"
+                }))
+                
+                hook_manager.on_agent_finish(skill_id, final_text)
+                
+                return final_text
+
+    except Exception as e:
+        return f"Lỗi khi chạy Sub-agent: {str(e)}"
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    """
+    Nhận tin nhắn người dùng và trả về phản hồi từ Orchestrator Agent.
+    """
+    global chat_history, model
+
+    if req.system_prompt:
+        model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=req.system_prompt,
+            tools=ORCHESTRATOR_TOOLS,
+        )
+    else:
+        # Re-init model with Lesson-Aware context (Sprint 5)
+        model = genai.GenerativeModel(
+            model_name=GEMINI_MODEL,
+            system_instruction=get_dynamic_system_prompt(lesson_slug=req.lesson_slug),
+            tools=ORCHESTRATOR_TOOLS,
+        )
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        global chat_history
+
+        # ── Guardrails Check (Bài 18, 19) ──
+        is_safe, warning_msg = check_input_safety(req.message)
+        if not is_safe:
+            yield f"data: {json.dumps({'type': 'error', 'message': warning_msg})}\n\n"
+            return
+
+        try:
+            chat = model.start_chat(history=chat_history)
+            current_message = req.message
+            tool_calls_made = []
+            
+            # Queue to pass events from sub-agent back to the main SSE stream
+            event_queue = asyncio.Queue()
+
+            while True:
+                response = await asyncio.to_thread(chat.send_message, current_message)
+                candidate = response.candidates[0]
+                parts = candidate.content.parts
+
+                has_function_call = any(hasattr(p, "function_call") and p.function_call.name for p in parts)
+
+                if has_function_call:
+                    function_responses = []
+                    for part in parts:
+                        if hasattr(part, "function_call") and part.function_call.name:
+                            fn_name = part.function_call.name
+                            fn_args = proto_to_py(dict(part.function_call.args))
+
+                            if fn_name == "delegate_task":
+                                skill_id = fn_args.get("skill_name", "")
+                                task_desc = fn_args.get("task_description")
+                                
+                                # Audit Trail Orchestrator
+                                await event_queue.put(json.dumps({
+                                    "type": "tool_call",
+                                    "tool": f"[ORCHESTRATOR] 🎯 Gọi: {skill_id}",
+                                    "args": {"task": task_desc}
+                                }))
+                                
+                                # Giao việc thực sự
+                                sub_task = asyncio.create_task(execute_sub_agent(skill_id, task_desc, event_queue))
+                                
+                                while not sub_task.done():
+                                    try:
+                                        msg = event_queue.get_nowait()
+                                        yield f"data: {msg}\n\n"
+                                    except asyncio.QueueEmpty:
+                                        await asyncio.sleep(0.05)
+                                        
+                                # Drain remaining queue
+                                while not event_queue.empty():
+                                    msg = await event_queue.get()
+                                    yield f"data: {msg}\n\n"
+                                
+                                result = sub_task.result()
+                                tool_calls_made.append({"tool": fn_name, "result": "Delegated successfully."})
+                                
+                                # Emit đóng badge loading UI
+                                yield f"data: {json.dumps({'type': 'tool_result', 'tool': f'[ORCHESTRATOR] 🎯 Gọi: {skill_id}', 'result': 'Hoàn thành'})}\n\n"
+
+                            
+                            elif fn_name == "create_execution_plan":
+                                plan = fn_args.get("plan", "")
+                                plan_event = json.dumps({"type": "text", "content": f"\n\n📋 **Kế hoạch (Planning):**\n{plan}\n\n"})
+                                yield f"data: {plan_event}\n\n"
+                                result = "Đã lập kế hoạch thành công. Hãy bắt đầu gọi delegate_task để thực thi."
+                                tool_calls_made.append({"tool": fn_name, "result": "Lập kế hoạch thành công."})
+                            
+                            elif fn_name == "think_aloud":
+                                thought = fn_args.get("thought", "")
+                                thought_event = json.dumps({"type": "text", "content": f"\n\n🤔 **Tự suy ngẫm (Metacognition):**\n*{thought}*\n\n"})
+                                yield f"data: {thought_event}\n\n"
+                                result = "Đã suy ngẫm. Hãy áp dụng bài học này vào hành động tiếp theo."
+                                tool_calls_made.append({"tool": fn_name, "result": "Suy ngẫm thành công."})
+                                
+                            else:
+                                result = f"Orchestrator không có quyền chạy hàm '{fn_name}'"
+
+                            function_responses.append(
+                                genai.protos.Part(
+                                    function_response=genai.protos.FunctionResponse(
+                                        name=fn_name,
+                                        response={"result": result}
+                                    )
+                                )
+                            )
+
+                            tool_result_event = json.dumps({
+                                "type": "tool_result",
+                                "tool": fn_name,
+                                "result": "[Internal output sent to Orchestrator]"
+                            })
+                            yield f"data: {tool_result_event}\n\n"
+
+                    current_message = function_responses
+                    continue
+
+                else:
+                    final_text = ""
+                    for part in parts:
+                        if hasattr(part, "text") and part.text:
+                            final_text += part.text
+
+                    words = final_text.split(" ")
+                    for i, word in enumerate(words):
+                        chunk = word + (" " if i < len(words) - 1 else "")
+                        text_event = json.dumps({"type": "text", "content": chunk})
+                        yield f"data: {text_event}\n\n"
+                        await asyncio.sleep(0.02)
+                        
+                    # ── LLM-as-a-Judge Evaluation (Bài 21) ──
+                    print("\n⚖️ [JUDGE AGENT] Đang chấm điểm câu trả lời...")
+                    evaluation = await evaluate_response(req.message, final_text)
+                    print(f"    Điểm: {evaluation.get('score')}/10")
+                    print(f"    Lý do: {evaluation.get('reason')}\n")
+                    
+                    badge = f"\n\n---\n*🛡️ Đánh giá bởi AI Judge: **{evaluation.get('score')}/10** điểm ({evaluation.get('reason')})*"
+                    badge_event = json.dumps({"type": "text", "content": badge})
+                    yield f"data: {badge_event}\n\n"
+                    await asyncio.sleep(0.02)
+
+                    chat_history = chat.history
+                    done_event = json.dumps({"type": "done", "tool_calls": tool_calls_made})
+                    yield f"data: {done_event}\n\n"
+                    break
+
+        except Exception as e:
+            error_event = json.dumps({"type": "error", "message": str(e)})
+            yield f"data: {error_event}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+@app.post("/reset")
+async def reset_chat():
+    global chat_history
+    chat_history = []
+    return {"status": "ok", "message": "Đã xóa lịch sử hội thoại."}
+
+@app.get("/api/system_status")
+async def get_system_status():
+    """Trả về trạng thái toàn bộ hệ thống để phục vụ UI Sidebar và System Introspection"""
+    
+    # 1. Main Agent Tools
+    orchestrator_tools = []
+    if ORCHESTRATOR_TOOLS:
+        for tool in ORCHESTRATOR_TOOLS:
+            if hasattr(tool, "function_declarations"):
+                for func in tool.function_declarations:
+                    orchestrator_tools.append({
+                        "name": func.name,
+                        "description": getattr(func, "description", "")
+                    })
+
+    # 2. Sub-agents (Skills)
+    skills_data = []
+    for skill_id, skill_info in SKILL_REGISTRY.items():
+        tools_list = []
+        if skill_info["tools"]:
+            for t in skill_info["tools"]:
+                if hasattr(t, "function_declarations"):
+                    # Xử lý FunctionDeclaration proto
+                    for func in t.function_declarations:
+                        tools_list.append({
+                            "name": func.name,
+                            "description": getattr(func, "description", "")
+                        })
+                elif callable(t):
+                    # Xử lý function Python thông thường
+                    tools_list.append({
+                        "name": getattr(t, "__name__", str(t)),
+                        "description": getattr(t, "__doc__", "")
+                    })
+
+        skills_data.append({
+            "id": skill_id,
+            "name": skill_info["name"],
+            "description": skill_info["description"],
+            "tools": tools_list
+        })
+        
+    return {
+        "orchestrator": {
+            "name": "Main Agent",
+            "role": "Orchestrator",
+            "tools": orchestrator_tools
+        },
+        "skills": skills_data,
+        "knowledge_bases": [
+            {"name": "sconnect_knowledge", "type": "ChromaDB (Vector RAG)"},
+            {"name": "knowledge_base.txt", "type": "Local Text Document"}
+        ]
+    }

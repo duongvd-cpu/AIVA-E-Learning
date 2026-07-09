@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agents for Beginners — Sconnect Learning Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/lessons.css">
+    <link rel="stylesheet" href="/static/theme-light.css">
+    <link rel="stylesheet" href="/static/assistant-dock.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+
+    <nav class="top-navbar glass-panel">
+        <div class="navbar-left">
+            <img src="/static/logo.png" alt="Sconnect Logo" class="navbar-logo">
+            <h1 class="navbar-title">AI Agents for Beginners</h1>
+            <span class="badge navbar-badge">Learning Hub</span>
+        </div>
+        <div class="navbar-right">
+            <div class="progress-bar-wrapper" id="progress-wrapper" title="Tiến trình học tập">
+                <div class="progress-bar" id="progress-bar" style="width: 0%"></div>
+                <span class="progress-text" id="progress-text">0/16</span>
+            </div>
+            <button class="btn-toggle-panel" id="btn-toggle-lessons" title="Ẩn/hiện danh sách bài"><i class="ti ti-layout-sidebar"></i><span class="tg-label">Bài giảng</span></button>
+            <button class="btn-toggle-panel" id="btn-toggle-agent" title="Mở/đóng Trợ lý AI"><i class="ti ti-robot"></i><span class="tg-label">Trợ lý AI</span></button>
+            <button class="btn-toggle-panel btn-guide" id="btn-guide" title="Xem hướng dẫn sử dụng"><i class="ti ti-help"></i><span class="tg-label">Hướng dẫn</span></button>
+        </div>
+    </nav>
+
+    <div class="app-container">
+        <div class="lesson-panel" id="lesson-panel">
+            <aside class="lesson-sidebar glass-panel" id="lesson-sidebar">
+                <div class="lesson-sidebar-header">
+                    <h3><i class="ti ti-books"></i> Giáo trình</h3>
+                </div>
+                <div class="lesson-list" id="lesson-list">
+                    <div class="loading-text">Đang tải bài học...</div>
+                </div>
+            </aside>
+            <div class="lesson-content-wrapper" id="lesson-content-wrapper">
+                <div class="lesson-welcome" id="lesson-welcome">
+                    <div class="welcome-icon"><i class="ti ti-school"></i></div>
+                    <h2>Chào mừng đến Trung tâm Đào tạo</h2>
+                    <p>Chọn một bài học ở sidebar bên trái để bắt đầu.</p>
+                    <p class="welcome-sub">Trợ lý AI luôn mở sẵn bên phải để trao đổi trực tiếp về bài học. Mẹo: mở một bài rồi bấm <strong>"Tóm tắt nhanh"</strong> để nắm ý chính.</p>
+                </div>
+                <div class="lesson-content hidden" id="lesson-content">
+                    <div class="lesson-header" id="lesson-header"></div>
+                    <article class="lesson-body" id="lesson-body"></article>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════ TRỢ LÝ AI — BONG BÓNG NỔI (kiểu Gemini) ══════ -->
+    <button id="agent-fab" class="agent-fab" title="Mở Trợ lý AI" aria-label="Mở Trợ lý AI">
+        <i class="ti ti-robot"></i>
+        <span class="agent-fab-dot"></span>
+    </button>
+
+    <section id="agent-widget" class="agent-widget" aria-hidden="true">
+        <header class="aw-header">
+            <span class="aw-title"><i class="ti ti-robot"></i> Trợ lý AI <span class="badge badge-live">Live</span></span>
+            <div class="aw-actions">
+                <button id="aw-arch-toggle" class="aw-icon-btn" title="Xem kiến trúc hệ thống"><i class="ti ti-sitemap"></i></button>
+                <button id="btn-reset" class="aw-icon-btn" title="Xóa lịch sử chat"><i class="ti ti-trash"></i></button>
+                <button id="agent-close" class="aw-icon-btn" title="Đóng"><i class="ti ti-x"></i></button>
+            </div>
+        </header>
+
+        <div class="system-section" id="system-section" style="display:none">
+            <div id="system-tree" class="system-tree">
+                <div class="loading-text">Đang nội soi hệ thống...</div>
+            </div>
+        </div>
+
+        <main class="chat-container">
+            <div id="chat-history" class="chat-history">
+                <div class="message agent-message">
+                    <div class="avatar"><i class="ti ti-robot"></i></div>
+                    <div class="message-content">
+                        <p>Xin chào! Mình là <strong>Trợ lý AI</strong> của khóa học tại <strong>Sconnect</strong>.</p>
+                        <p><i class="ti ti-bulb"></i> Mẹo: Bôi đen đoạn text trong bài giảng rồi bấm <strong>"Hỏi AI"</strong> để mình giải thích ngay!</p>
+                    </div>
+                </div>
+            </div>
+            <div id="typing-indicator" class="typing-indicator hidden">
+                <div class="avatar"><i class="ti ti-robot"></i></div>
+                <div class="dots"><span></span><span></span><span></span></div>
+            </div>
+            <div class="chat-input-wrapper">
+                <form id="chat-form" class="chat-input-form">
+                    <textarea id="user-input" placeholder="Hỏi Trợ lý AI..." rows="1" required></textarea>
+                    <button type="submit" id="btn-send" class="btn-primary" title="Gửi"><i class="ti ti-send"></i></button>
+                </form>
+            </div>
+        </main>
+    </section>
+
+    <div class="ask-agent-popup hidden" id="ask-agent-popup">
+        <button id="btn-ask-agent" title="Gửi đoạn này cho Agent giải thích"><i class="ti ti-message-chatbot"></i> Hỏi AI</button>
+    </div>
+
+    <script src="/static/lessons.js"></script>
+    <script src="/static/app.js"></script>
+    <script src="/static/onboarding.js"></script>
+    <script src="/static/enhance.js"></script>
+    <script src="/static/widget.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="/static/assistant-plus.js"></script>
+</body>
+</html>

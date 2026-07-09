@@ -1,0 +1,20 @@
+# TÀI LIỆU NỘI BỘ - SCONNECT VÀ KHÓA HỌC AI AGENT
+
+## 1. Thông tin về khóa học AI Agents for Beginners
+Chương trình "AI Agents for Beginners" (AI Agents cho người mới bắt đầu) được Sconnect thiết kế nhằm đào tạo lập trình hệ thống Agentic AI. Khóa học được chia thành 5 Modules cốt lõi:
+- **Module 1 - Foundations (Nhập môn):** Các khái niệm cơ bản về AI Agents, Microsoft Agent Framework và Azure AI.
+- **Module 2 - Capabilities (Năng lực mở rộng):** Mẫu thiết kế Sử dụng công cụ (Tool Use) và trí nhớ của Agent (Memory).
+- **Module 3 - Cognitive (Tư duy & Lập kế hoạch):** Mẫu thiết kế Lên kế hoạch (Planning) và tự sửa lỗi (Metacognition) xử lý công việc phức tạp.
+- **Module 4 - Architecture (Kiến trúc hệ thống):** Thiết kế Sổ tay ngữ cảnh (Context Handbook), lắp ráp ngữ cảnh (Context Assembly) và quản lý hệ thống nhiều Agent (Orchestration).
+- **Module 5 - Production (Vận hành & Sản xuất):** Lớp bảo vệ (Guardrails), theo dõi luồng sự kiện (Telemetry) và dùng LLM chấm điểm Agent (LLM-as-a-judge).
+Khóa học cung cấp môi trường thực hành Web Agent Local mạnh mẽ giúp học viên ứng dụng ngay lập tức các mẫu thiết kế trên vào thực tế.
+
+## 2. Thông tin về Sconnect
+Sconnect là một công ty hàng đầu tại Việt Nam trong lĩnh vực sản xuất nội dung hoạt hình và giải trí số.
+Một trong những dự án nổi bật nhất của Sconnect là Wolfoo, đã đạt được hàng tỷ lượt xem trên toàn cầu.
+Công ty chú trọng vào việc ứng dụng công nghệ AI để tối ưu hóa quy trình sản xuất (ví dụ như hệ thống AIVA Studio).
+
+## 3. Chính sách Nghỉ phép nội bộ (Ví dụ minh hoạ RAG)
+Nhân viên chính thức được hưởng 12 ngày phép năm.
+Khi xin nghỉ phép trên 3 ngày, nhân viên cần phải thông báo trước ít nhất 1 tuần và được sự phê duyệt của Quản lý trực tiếp (Line Manager).
+Trường hợp ốm đau đột xuất, nhân viên cần thông báo ngay trong buổi sáng của ngày nghỉ và bổ sung giấy tờ bệnh viện sau khi đi làm lại.

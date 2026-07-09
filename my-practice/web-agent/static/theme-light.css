@@ -1,0 +1,383 @@
+/* ════════════════════════════════════════════════════════════
+   theme-light.css — [ADR-005] Giao diện sáng kiểu Udemy/Coursera
+   Nạp SAU CÙNG để override dark theme. Accent: Sconnect green.
+   ════════════════════════════════════════════════════════════ */
+
+:root{
+  --bg-main:#f7f9fa;
+  --bg-panel:#ffffff;
+  --border-color:#e4e8ec;
+  --text-primary:#1c1d1f;
+  --text-secondary:#6a6f73;
+  --accent-color:#4c8c00;
+  --accent-hover:#3d7300;
+  --user-msg-bg:#eaf6d6;
+  --agent-msg-bg:#ffffff;
+  --tool-msg-bg:rgba(127,214,3,0.12);
+  --tool-msg-border:rgba(127,214,3,0.45);
+}
+
+body{background:#f7f9fa !important;background-image:none !important;color:var(--text-primary)}
+.glass-panel{background:#ffffff !important;backdrop-filter:none !important;-webkit-backdrop-filter:none !important;border-color:#e4e8ec}
+.top-navbar{box-shadow:0 1px 0 #e4e8ec}
+.navbar-title{color:#3d7300}
+.navbar-badge{background:rgba(127,214,3,0.16) !important;color:#3d7300 !important}
+
+.progress-bar-wrapper{background:#e4e8ec}
+.progress-bar{background:#7fd603}
+.progress-text{color:#6a6f73}
+
+.btn-toggle-panel{background:#f4f6f8;border-color:#e4e8ec;color:#1c1d1f}
+.btn-toggle-panel:hover{background:#e9edf1;border-color:#7fd603}
+.btn-guide{color:#3d7300;border-color:rgba(127,214,3,0.6);background:rgba(127,214,3,0.12)}
+.btn-guide:hover{background:rgba(127,214,3,0.22)}
+
+.lesson-content-wrapper{background:#ffffff}
+.lesson-item{color:#4b4f52}
+.lesson-item:hover{background:#f2f4f6;color:#1c1d1f}
+.lesson-item.active{background:rgba(127,214,3,0.14);color:#3d7300;border-color:rgba(127,214,3,0.45)}
+.lesson-item .lesson-num{background:#eef1f3}
+.lesson-item.active .lesson-num{background:#7fd603;color:#14310a}
+.lesson-item .demo-badge{background:rgba(59,130,246,0.14);color:#2563eb}
+.lesson-item .done-badge{color:#3f9142}
+
+.section-title{color:#1c1d1f}
+.section-count{color:#6a6f73;background:#eef1f3}
+.advanced-section{border-top-color:#e4e8ec}
+.advanced-heading .section-title{color:#4b4f52}
+.advanced-section .adv-caret{color:#6a6f73}
+.advanced-section .lesson-item .lesson-title-text{color:#6a6f73}
+.advanced-section>summary:hover .section-title{color:#3d7300}
+
+.panel-divider{background:#eef1f3}
+.panel-divider:hover{background:rgba(127,214,3,0.2)}
+.divider-grip{background:#cfd4d8}
+
+.system-section h3{color:#6a6f73}
+.tree-node{background:#f7f9fa;border-color:#e4e8ec}
+.tool-list{border-left-color:#e4e8ec}
+.tool-list li{color:#6a6f73}
+.tool-list li::before{background:#d5dade}
+.active-highlight{background:rgba(127,214,3,0.18) !important;border-color:#7fd603 !important;box-shadow:0 0 10px rgba(127,214,3,0.25)}
+.active-tool{color:#3d7300 !important}
+
+.lesson-welcome h2{color:#3d7300}
+.lesson-welcome p{color:#6a6f73}
+
+.avatar{background:#f2f4f6;border-color:#e4e8ec}
+.user-message .avatar{background:#7fd603;border-color:#7fd603}
+.message-content{background:#ffffff;border-color:#e4e8ec;color:#1c1d1f;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+.user-message .message-content{background:#eaf6d6;border-color:#d5ecb3;color:#1c1d1f}
+.message-content pre{background:#f4f6f8;border-color:#e4e8ec}
+.message-content code{background:#eef1f3;color:#1c1d1f}
+.message-content pre code{background:transparent}
+
+.tool-event{background:#f4f6f8;border-color:#e4e8ec;color:#6a6f73}
+.tool-event.tool-result{background:rgba(127,214,3,0.10);border-color:rgba(127,214,3,0.4);color:#3d7300}
+.tool-event .spinner{border-color:#c4c8cc;border-top-color:transparent}
+.tool-detail>summary{color:#6a6f73}
+.tool-detail>summary:hover{color:#1c1d1f}
+.tool-detail code{background:#eef1f3;color:#4b4f52}
+
+.dots{background:#f2f4f6;border-color:#e4e8ec}
+.dots span{background:#9aa0a6}
+
+.chat-input-wrapper{border:1px solid #e4e8ec}
+textarea{color:#1c1d1f}
+textarea::placeholder{color:#9aa0a6}
+.btn-primary{background:#7fd603;color:#14310a}
+.btn-primary:hover{background:#6bb800}
+.btn-secondary{background:#f4f6f8;color:#1c1d1f;border-color:#e4e8ec}
+.btn-secondary:hover{background:#e9edf1}
+
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18)}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,0.3)}
+
+.suggestion-chips{border-color:#e4e8ec;background:rgba(127,214,3,0.06)}
+.suggestion-label{color:#3d7300}
+.suggestion-chip{background:#ffffff;border-color:#e4e8ec;color:#1c1d1f}
+.suggestion-chip:hover{background:rgba(127,214,3,0.12);border-color:rgba(127,214,3,0.45);color:#14310a}
+
+.loading-text{color:#6a6f73}
+
+/* ── Vùng đọc bài (giống trang khóa học) ── */
+.lesson-header h1{color:#1c1d1f}
+.lesson-meta .badge{background:#eef1f3 !important;color:#3d7300 !important}
+.lesson-video{border-color:#e4e8ec}
+.lesson-body{color:#2d2f31;font-size:1rem;line-height:1.8}
+.lesson-body h1{color:#1c1d1f;border-bottom-color:rgba(127,214,3,0.35)}
+.lesson-body h2{color:#1c1d1f;border-bottom-color:#e4e8ec}
+.lesson-body h3{color:#2d2f31}
+.lesson-body h4{color:#4b4f52}
+.lesson-body a{color:#2563eb;border-bottom-color:rgba(37,99,235,0.3)}
+.lesson-body a:hover{color:#1d4ed8;border-bottom-color:#1d4ed8}
+.lesson-body a.internal-lesson-link{color:#3d7300;border-bottom-color:rgba(127,214,3,0.4)}
+.lesson-body a.internal-lesson-link:hover{color:#2f6000}
+.lesson-body blockquote{background:rgba(127,214,3,0.08);color:#2d2f31;border-left-color:#7fd603}
+.lesson-body blockquote strong{color:#3d7300}
+.lesson-body img{border-color:#e4e8ec;box-shadow:0 2px 12px rgba(0,0,0,0.08)}
+.lesson-body code{background:#f0eef6;color:#8250df}
+.lesson-body pre{background:#f6f8fa;border-color:#e4e8ec}
+.lesson-body pre code{color:#1c1d1f}
+.lesson-body thead th{background:rgba(127,214,3,0.12);color:#3d7300;border-bottom-color:rgba(127,214,3,0.4)}
+.lesson-body tbody td{color:#2d2f31;border-bottom-color:#eceff1}
+.lesson-body tbody tr:hover{background:#f7f9fa}
+.lesson-body hr{border-top-color:#e4e8ec}
+.lesson-body strong{color:#1c1d1f}
+.lesson-body em{color:#2d2f31}
+.lesson-body .alert{color:#2d2f31}
+.lesson-body .alert-tip{background:rgba(34,197,94,0.10)}
+.lesson-body .alert-important{background:rgba(59,130,246,0.10)}
+.lesson-body .alert-warning{background:rgba(249,115,22,0.10)}
+.lesson-body .alert-caution{background:rgba(239,68,68,0.10)}
+.lesson-body .alert-note{background:rgba(168,85,247,0.10)}
+
+.mini-toc{background:rgba(255,255,255,0.96) !important;backdrop-filter:none !important;border-bottom-color:#e4e8ec}
+.mini-toc-title{color:#6a6f73}
+.toc-item{color:#6a6f73}
+.toc-item:hover{color:#1c1d1f}
+.toc-item.toc-active{color:#3d7300;border-left-color:#7fd603}
+
+.lesson-nav{border-top-color:#e4e8ec}
+.lesson-nav-btn{background:#f4f6f8;border-color:#e4e8ec;color:#2d2f31}
+.lesson-nav-btn:hover{background:rgba(127,214,3,0.12);border-color:rgba(127,214,3,0.4);color:#3d7300}
+.img-error-placeholder{color:#6a6f73}
+
+/* ── Onboarding sáng ── */
+.ob-modal{background:#ffffff;border-color:#e4e8ec;color:#1c1d1f;box-shadow:0 20px 60px rgba(0,0,0,0.18)}
+.ob-modal h2{color:#1c1d1f}
+.ob-modal p{color:#4b4f52}
+.ob-welcome-sub{color:#6a6f73 !important}
+.ob-card{background:#ffffff;border-color:rgba(127,214,3,0.6);color:#1c1d1f;box-shadow:0 16px 48px rgba(0,0,0,0.18)}
+.ob-step{color:#6a6f73}
+.ob-skip{color:#6a6f73}
+.ob-skip:hover{color:#1c1d1f}
+.ob-title{color:#1c1d1f}
+.ob-desc{color:#4b4f52}
+.ob-dot{background:#cfd4d8}
+.ob-dot.on{background:#7fd603}
+.ob-btn{background:#f4f6f8;border-color:#e4e8ec;color:#1c1d1f}
+.ob-btn:hover{background:#e9edf1}
+.ob-btn-primary{background:#7fd603;border-color:#7fd603;color:#14310a}
+.ob-btn-primary:hover{background:#6bb800}
+
+/* ════════ [ADR-005] Polish: card nổi + animation giàu tính education ════════ */
+/* Bo góc + đổ bóng mạnh hơn, hover nổi */
+.message-content{border-radius:14px;box-shadow:0 3px 14px rgba(16,24,40,0.07)}
+.agent-message .message-content{border-top-left-radius:6px}
+.user-message .message-content{border-top-right-radius:6px}
+.tree-node{border-radius:12px;transition:transform .2s ease, box-shadow .2s ease}
+.tree-node:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(16,24,40,0.08)}
+.suggestion-chip{border-radius:10px;transition:transform .15s ease, box-shadow .15s ease, background .15s}
+.suggestion-chip:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(127,214,3,0.18)}
+.chat-input-wrapper{border-radius:16px;box-shadow:0 2px 12px rgba(16,24,40,0.06)}
+.ob-card,.ob-modal{border-radius:18px}
+.lesson-video{box-shadow:0 6px 24px rgba(16,24,40,0.12)}
+.lesson-body img{border-radius:12px}
+
+/* Lesson item: bo góc, hover trượt nhẹ, active có bóng */
+.lesson-item{border-radius:10px;transition:transform .15s ease, background .15s, box-shadow .15s;flex-wrap:wrap}
+.lesson-item:hover{transform:translateX(3px)}
+.lesson-item.active{box-shadow:0 3px 12px rgba(127,214,3,0.20)}
+
+/* Nút bấm có phản hồi */
+.btn-primary{transition:transform .12s ease, background .2s}
+.btn-primary:active{transform:scale(0.93)}
+.btn-toggle-panel,.lesson-nav-btn{transition:transform .12s ease, background .2s, border-color .2s, color .2s}
+.lesson-nav-btn:hover{transform:translateY(-1px)}
+
+/* Progress bar tổng mượt */
+.progress-bar{transition:width .6s cubic-bezier(.4,0,.2,1)}
+
+/* Khu đọc bài: trắng, rộng & thoáng hơn (giảm sidebar) */
+.lesson-sidebar{width:186px}
+.lesson-content-wrapper{background:#ffffff}
+.lesson-body{max-width:820px;margin:0 auto;font-size:1.02rem;line-height:1.85}
+.lesson-header{max-width:820px;margin:0 auto}
+
+/* Fade/slide-in cho nội dung bài (cảm giác học mượt) */
+@keyframes lessonIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.lesson-content:not(.hidden) .lesson-body{animation:lessonIn .38s ease}
+.lesson-content:not(.hidden) .lesson-header{animation:lessonIn .32s ease}
+
+/* Done badge pop */
+@keyframes pop{0%{transform:scale(0)}70%{transform:scale(1.25)}100%{transform:scale(1)}}
+.lesson-item .done-badge{animation:pop .3s ease}
+
+/* ── Thanh % đọc từng bài (enhance.js chèn) ── */
+.lp-track{flex-basis:100%;height:4px;background:#eceff1;border-radius:3px;margin-top:7px;overflow:hidden}
+.lp-fill{height:100%;width:0;background:linear-gradient(90deg,#7fd603,#a3e635);border-radius:3px;transition:width .45s ease}
+.lesson-item.active .lp-track{background:#e6f3d0}
+
+/* ── Toast động viên (educational delight) ── */
+.edu-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#ffffff;border:1px solid rgba(127,214,3,0.55);box-shadow:0 12px 44px rgba(16,24,40,0.20);border-radius:14px;padding:12px 18px;display:flex;align-items:center;gap:10px;color:#1c1d1f;font-size:0.9rem;font-weight:500;opacity:0;pointer-events:none;z-index:10001;transition:opacity .3s ease, transform .3s ease}
+.edu-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.edu-toast .ti{color:#5aa300;font-size:22px}
+
+/* ── Icon Tabler: canh giữa + nhịp nhẹ cho vài chỗ ── */
+.ti{vertical-align:-2px}
+.section-title .ti{margin-right:4px;color:#5aa300}
+@keyframes eduPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.10)}}
+.edu-pulse{display:inline-block;animation:eduPulse 1.8s ease-in-out infinite}
+
+/* ════════ [ADR-005] Dashboard trang chủ học tập (Coursera-style) ════════ */
+.lesson-welcome.has-dashboard{display:block;height:auto;text-align:left;padding:28px 32px;justify-content:flex-start;align-items:stretch}
+.dashboard{max-width:820px;margin:0 auto}
+.dash-hero{display:flex;gap:24px;align-items:center;background:#fff;border:1px solid #e4e8ec;border-radius:16px;padding:22px;box-shadow:0 3px 14px rgba(16,24,40,0.06)}
+.dash-ring{width:104px;height:104px;border-radius:50%;background:conic-gradient(#7fd603 calc(var(--pct)*1%), #e6eaee 0);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.dash-ring-inner{width:78px;height:78px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.dash-ring-pct{font-size:1.35rem;font-weight:700;color:#1c1d1f;line-height:1}
+.dash-ring-label{font-size:0.64rem;color:#6a6f73;margin-top:2px}
+.dash-hero-info h2{font-size:1.3rem;color:#1c1d1f;margin-bottom:6px}
+.dash-hero-info p{color:#4b4f52;margin-bottom:12px;font-size:0.92rem}
+.dash-continue{background:#7fd603;color:#14310a;border:none;border-radius:10px;padding:10px 16px;font-weight:600;font-size:0.9rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:transform .12s ease, background .2s;text-align:left}
+.dash-continue:hover{background:#6bb800;transform:translateY(-1px)}
+.dash-continue .ti{font-size:18px}
+.dash-section-title{font-size:1.05rem;color:#1c1d1f;margin:26px 0 12px;font-weight:600}
+.dash-modules{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+.dash-module{text-align:left;background:#fff;border:1px solid #e4e8ec;border-top:3px solid var(--mc);border-radius:14px;padding:16px;cursor:pointer;transition:transform .15s ease, box-shadow .15s ease}
+.dash-module:hover{transform:translateY(-3px);box-shadow:0 8px 22px rgba(16,24,40,0.10)}
+.dash-module-top{display:flex;justify-content:space-between;align-items:center}
+.dash-module-icon{font-size:1.3rem}
+.dash-module-pct{font-size:0.82rem;font-weight:700;color:var(--mc)}
+.dash-module-title{font-size:0.9rem;font-weight:600;color:#1c1d1f;margin:8px 0 10px;line-height:1.4;min-height:2.5em}
+.dash-module-bar{height:5px;background:#eceff1;border-radius:3px;overflow:hidden}
+.dash-module-bar>div{height:100%;background:var(--mc);border-radius:3px;transition:width .5s ease}
+.dash-module-count{font-size:0.72rem;color:#6a6f73;margin-top:8px}
+@media (max-width:520px){.dash-hero{flex-direction:column;text-align:center}}
+
+/* ════════ [ADR-005] Icon Tabler chuẩn hoá + Toggle kiểu Udemy ════════ */
+/* Toggle pills trên navbar */
+.navbar-right{gap:8px}
+.navbar-right .btn-toggle-panel{width:auto;height:34px;padding:0 12px;display:inline-flex;align-items:center;gap:6px;font-size:0.82rem;border-radius:8px;border:1px solid #e4e8ec;background:#fff;color:#3a3f45;transition:background .15s,border-color .15s,color .15s}
+.navbar-right .btn-toggle-panel .ti{font-size:17px}
+.navbar-right .btn-toggle-panel:hover{background:#f2f4f6;border-color:#cfd6dc}
+#btn-toggle-lessons:not(.toggle-off),#btn-toggle-agent:not(.toggle-off){background:rgba(127,214,3,0.14);border-color:rgba(127,214,3,0.5);color:#3d7300}
+.btn-toggle-panel.toggle-off{background:#fff;color:#9aa0a6}
+.btn-toggle-panel.toggle-off .ti{opacity:.7}
+#btn-guide{background:#7fd603;border:1px solid #7fd603;color:#14310a;font-weight:600}
+#btn-guide:hover{background:#6bb800;border-color:#6bb800}
+@media (max-width:900px){.navbar-right .tg-label{display:none}.navbar-right .btn-toggle-panel{padding:0 9px}}
+
+/* Live badge có chấm nhấp nháy */
+.badge-live{background:rgba(127,214,3,0.16);color:#3d7300;display:inline-flex;align-items:center;gap:5px}
+.badge-live::before{content:'';width:7px;height:7px;border-radius:50%;background:#5aa300;display:inline-block;animation:eduPulse 1.6s ease-in-out infinite}
+
+/* Module: icon + mũi tên gập */
+.module-title{display:flex;align-items:center;gap:6px}
+.module-toggle{display:inline-flex;align-items:center;transition:transform .15s ease}
+.module-toggle.collapsed{transform:rotate(-90deg)}
+.module-toggle .ti{font-size:16px;color:#9aa0a6}
+.mod-ic{font-size:16px}
+.module-title-label{flex:1}
+
+/* Lesson item: trạng thái tròn (checkbox kiểu Udemy) */
+.lesson-item{gap:9px}
+.lesson-stat{width:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.lesson-stat .ti{font-size:17px}
+.lesson-done{color:#5aa300}
+.lesson-todo{color:#c8ccd0}
+.lesson-item:hover .lesson-todo{color:#7fd603}
+.lesson-title-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Meta badge icon */
+.lesson-meta .badge .ti{font-size:14px}
+
+/* Welcome icon */
+.welcome-icon .ti{font-size:56px;color:#7fd603}
+
+/* Chat avatar icon */
+.avatar{color:#3d7300}
+.avatar .ti{font-size:17px}
+.user-message .avatar .ti{color:#14310a}
+
+/* System tree icons */
+.node-title .ti{font-size:15px;color:#5aa300}
+.tool-list li .ti{font-size:13px;color:#9aa0a6;margin-right:2px}
+
+/* Send button icon */
+.btn-primary .ti{font-size:20px}
+/* Reset button icon */
+.btn-secondary .ti{font-size:15px;vertical-align:-2px;margin-right:2px}
+
+/* ════════ [ADR-005] Trợ lý AI dạng bong bóng nổi (Gemini-style) ════════ */
+/* Bài học chiếm toàn bộ chiều ngang */
+.app-container{display:block}
+.lesson-panel{width:100% !important}
+.lesson-sidebar{width:250px}
+.lesson-sidebar.collapsed{width:0;overflow:hidden;border-right:none}
+
+/* FAB tròn góc dưới phải */
+.agent-fab{position:fixed;right:24px;bottom:24px;width:58px;height:58px;border-radius:50%;background:#7fd603;color:#14310a;border:none;box-shadow:0 8px 24px rgba(127,214,3,0.45);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:900;transition:transform .15s ease, box-shadow .2s ease}
+.agent-fab:hover{transform:translateY(-2px) scale(1.05);box-shadow:0 12px 30px rgba(127,214,3,0.55)}
+.agent-fab .ti{font-size:28px}
+.agent-fab.hidden{display:none}
+.agent-fab-dot{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(127,214,3,0.6);animation:fabPulse 2.2s ease-out infinite;pointer-events:none}
+@keyframes fabPulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.55);opacity:0}}
+
+/* Bong bóng chat */
+.agent-widget{position:fixed;right:24px;bottom:24px;width:400px;max-width:calc(100vw - 32px);height:640px;max-height:calc(100vh - 48px);background:#fff;border:1px solid #e4e8ec;border-radius:16px;box-shadow:0 24px 60px rgba(16,24,40,0.22);display:flex;flex-direction:column;overflow:hidden;z-index:950;opacity:0;transform:translateY(16px) scale(.98);pointer-events:none;transition:opacity .18s ease, transform .18s ease}
+.agent-widget.open{opacity:1;transform:none;pointer-events:auto}
+.aw-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #e4e8ec;flex:none}
+.aw-title{display:flex;align-items:center;gap:8px;font-weight:600;font-size:0.95rem;color:#1c1d1f}
+.aw-title .ti{color:#3d7300;font-size:18px}
+.aw-actions{display:flex;gap:4px}
+.aw-icon-btn{width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:#6a6f73;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,color .15s}
+.aw-icon-btn:hover{background:#f2f4f6;color:#1c1d1f}
+.aw-icon-btn.on{background:rgba(127,214,3,0.16);color:#3d7300}
+.aw-icon-btn .ti{font-size:18px}
+.agent-widget .system-section{max-height:190px;border-bottom:1px solid #e4e8ec;padding:10px 12px;overflow:auto;flex:none}
+.agent-widget .chat-container{flex:1;min-height:0;display:flex;flex-direction:column}
+.agent-widget .chat-history{flex:1;padding:14px;gap:12px}
+.agent-widget .chat-input-wrapper{margin:10px;padding:8px 12px;border:1px solid #e4e8ec;border-radius:12px}
+
+@media (max-width:520px){
+  .agent-widget{right:8px;left:8px;bottom:8px;width:auto;height:82vh;max-height:none}
+  .agent-fab{right:16px;bottom:16px}
+}
+
+/* ════════ [FIX] Khôi phục scroll sau khi chuyển layout full-width ════════ */
+.app-container{display:block;height:calc(100vh - var(--navbar-height));overflow:hidden}
+.lesson-panel{height:100%}
+.lesson-content-wrapper{height:100%;overflow-y:auto}
+
+/* ════════ [FIX] Bố cục đọc: Nội dung + Mục lục = 1 cụm căn giữa cân đối ════════ */
+.mini-toc-title{ margin-bottom:8px; font-size:0.72rem; letter-spacing:.04em; }
+.mini-toc .toc-item{ padding:5px 0 5px 10px; font-size:0.8rem; line-height:1.35; white-space:normal; overflow:visible; text-overflow:clip; }
+.mini-toc::-webkit-scrollbar{ width:6px; }
+.mini-toc::-webkit-scrollbar-thumb{ background:#d5dbe1; border-radius:6px; }
+
+/* Màn rộng: nội dung (trái) + ToC (phải) cạnh nhau, cả cụm căn giữa -> hết mảng trắng lệch */
+@media (min-width:1401px){
+    .lesson-content-wrapper{ display:flex; flex-direction:row-reverse; justify-content:center; align-items:flex-start; gap:40px; padding:10px 48px 56px; }
+    .lesson-content{ flex:0 1 760px; max-width:760px; width:100%; }
+    .lesson-body, .lesson-header{ max-width:100%; margin:0; }
+    .mini-toc{
+        flex:0 0 220px; width:220px; align-self:flex-start;
+        position:sticky; top:16px; max-height:calc(100vh - 130px); overflow-y:auto;
+        background:#ffffff; border:1px solid #e6eaee; border-radius:14px; padding:12px 14px;
+        box-shadow:0 6px 22px rgba(16,24,40,0.08);
+        backdrop-filter:none !important; -webkit-backdrop-filter:none !important; z-index:5;
+    }
+    .lesson-welcome{ flex:1 1 100%; }
+}
+
+/* Màn hẹp: ẩn ToC, nội dung căn giữa gọn gàng */
+@media (max-width:1400px){
+    .mini-toc{ display:none !important; }
+    .lesson-body, .lesson-header{ max-width:820px; margin:0 auto; }
+}
+
+/* ════════ [FIX] Chữ bài học rõ trên nền sáng + nổi bật khi đang chọn ════════ */
+.lesson-title-text{ color:#3c4043; }                                   /* bình thường: xám đậm, dễ đọc trên nền trắng */
+.lesson-item:hover .lesson-title-text{ color:#1c1d1f; }                /* hover: đen rõ */
+.lesson-item.active .lesson-title-text{ color:#2f6b00; font-weight:700; } /* đang chọn: xanh Sconnect đậm + in đậm */
+.advanced-section .lesson-item .lesson-title-text{ color:#6a6f73; }     /* nhóm Nâng cao: xám vừa (vẫn đọc được) */
+.advanced-section .lesson-item.active .lesson-title-text{ color:#2f6b00; font-weight:700; }
+.lesson-item.active{ background:rgba(127,214,3,0.16); border-left-color:#7fd603; } /* nền chọn rõ hơn chút */
+
+/* ════════ [FIX] Guide: nền mờ (spotlight) + vùng sáng nổi bật ════════ */
+.ob-tour-backdrop{ position:fixed; inset:0; background:rgba(15,23,42,0.45); z-index:9990; opacity:0; pointer-events:none; transition:opacity .2s ease; }
+.ob-tour-backdrop.show{ opacity:1; pointer-events:auto; }
+.onboarding-highlight{ z-index:9995 !important; outline:3px solid #7fd603 !important; outline-offset:3px; border-radius:10px; animation:obPulse 1.6s ease-in-out infinite; }
+@keyframes obPulse{ 0%,100%{ box-shadow:0 0 0 4px rgba(127,214,3,0.32); } 50%{ box-shadow:0 0 0 10px rgba(127,214,3,0.10); } }

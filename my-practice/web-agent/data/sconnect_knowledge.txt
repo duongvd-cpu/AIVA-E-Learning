@@ -1,0 +1,16 @@
+# KIẾN THỨC VỀ CÔNG TY SCONNECT (Dành cho RAG)
+
+## Tầm nhìn và Sứ mệnh
+Sconnect là một hệ sinh thái sáng tạo nội dung giải trí và giáo dục, hướng tới mục tiêu mang lại giá trị tích cực cho cộng đồng toàn cầu. Tầm nhìn của Sconnect là trở thành công ty sáng tạo nội dung hàng đầu thế giới. Sứ mệnh của chúng tôi là "Kết nối những giá trị toàn cầu" (Connect the world).
+
+## Định hướng công nghệ AI
+Sconnect tiên phong áp dụng AI vào quy trình sản xuất nội dung (AI-first company). Nổi bật là AIVA Studio - hệ thống tự động hóa kịch bản, vẽ Storyboard, sinh video bằng công nghệ AI đa tác nhân (Multi-Agent).
+
+## Khóa học "AI Agents for Beginners"
+Chương trình "AI Agents for Beginners" (AI Agents cho người mới bắt đầu) được Sconnect thiết kế nhằm đào tạo lập trình hệ thống Agentic AI. Khóa học được chia thành 5 Modules cốt lõi:
+- **Module 1 - Foundations (Nhập môn):** Các khái niệm cơ bản về AI Agents, Microsoft Agent Framework và Azure AI.
+- **Module 2 - Capabilities (Năng lực mở rộng):** Mẫu thiết kế Sử dụng công cụ (Tool Use) và trí nhớ của Agent (Memory).
+- **Module 3 - Cognitive (Tư duy & Lập kế hoạch):** Mẫu thiết kế Lên kế hoạch (Planning) và tự sửa lỗi (Metacognition) xử lý công việc phức tạp.
+- **Module 4 - Architecture (Kiến trúc hệ thống):** Thiết kế Sổ tay ngữ cảnh (Context Handbook), lắp ráp ngữ cảnh (Context Assembly) và quản lý hệ thống nhiều Agent (Orchestration).
+- **Module 5 - Production (Vận hành & Sản xuất):** Lớp bảo vệ (Guardrails), theo dõi luồng sự kiện (Telemetry) và dùng LLM chấm điểm Agent (LLM-as-a-judge).
+Khóa học cung cấp môi trường thực hành Web Agent Local mạnh mẽ giúp học viên ứng dụng ngay lập tức các mẫu thiết kế trên vào thực tế.

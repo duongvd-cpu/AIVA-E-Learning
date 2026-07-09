@@ -1,0 +1,46 @@
+# [CAPSTONE] Thiết kế & Tùy biến một hệ Agent được đưa xuống
+
+> Chặng 6 · Bài 16/16 — Thiết kế & Tùy biến (đích) · Thực hành: **Antigravity** (lối lui: Claude)
+> 🏁 Bài tổng kết — hội tụ mọi chặng.
+
+---
+
+## 🎯 Mục tiêu
+- **Đọc-hiểu** một hệ agent có sẵn (dùng `web-agent` làm "hệ thống được đưa xuống").
+- **Tùy biến**: thêm một **skill mới cho đơn vị** và một **luật định tuyến**, chạy & kiểm.
+- Giữ đúng ranh giới **chuẩn ↔ tùy biến** để hệ vẫn đồng bộ được.
+
+## 📖 Lý thuyết (tổng hợp)
+Đây là lúc ghép mọi thứ: bạn nhận một hệ thống → lập **bản thiết kế 1 trang** ([bài 39]) để hiểu nó → khoanh vùng **[TÙY BIẾN]** → thêm **skill** ([bài 34]) + **định tuyến** ([bài 37]) cho đặc thù đơn vị → bảo đảm **an toàn** ([bài 38]) → chạy thử. Quy trình chuẩn: *hiểu → thiết kế → tùy biến → kiểm.*
+
+## 🔍 Soi qua ví dụ
+"Hệ thống được đưa xuống" = `my-practice/web-agent`. Vùng [TÙY BIẾN] điển hình: `skills/` (thêm skill), chính sách định tuyến trong prompt, `data/` (tri thức). Vùng [CHUẨN] không đụng: cơ chế Orchestrator, guardrails nền.
+
+## 🛠️ Thực hành (dự án, từng bước)
+**Trên Antigravity (khuyến nghị):**
+1. Mở `my-practice/web-agent` trong Antigravity.
+2. **Hiểu:** yêu cầu agent quét repo và tóm tắt kiến trúc (Orchestrator, skills, data). Đối chiếu bản thiết kế 1 trang.
+3. **Thiết kế:** mô tả 1 skill cho "đơn vị" — ví dụ `faq_phong_ban(cau_hoi)` trả lời FAQ nội bộ.
+4. **Tùy biến:** tạo `skills/faq_skill.py` đúng quy ước (`SKILL_NAME`, `SYSTEM_PROMPT`, `SCHEMAS`, `FUNCTIONS`); thêm luật định tuyến "hỏi FAQ nội bộ → faq_skill".
+5. **Kiểm:** chạy server, hỏi một câu FAQ, xác nhận agent định tuyến đúng và trả lời. Thử một câu ngoài phạm vi để thấy nó không lạm dụng skill.
+6. **Giữ ranh giới:** không sửa cơ chế Orchestrator/guardrails lõi.
+
+**Lối lui trên Claude (nếu chưa có Antigravity):**
+- Dán code `skills/weather_skill.py` làm mẫu, nhờ Claude **viết `faq_skill.py`** theo cùng khuôn; nhờ Claude nêu **luật định tuyến** cần thêm; rà lại theo checklist an toàn ([bài 38]).
+
+**Kỳ vọng:** một skill mới chạy được, định tuyến đúng, lõi chuẩn nguyên vẹn.
+**Nếu kẹt:** so file mới với `weather_skill.py`; kiểm skill đã khai `FUNCTIONS` chưa (lỗi hay gặp — xem DEBT-01 nếu có).
+
+## ↪️ Chuyển giao
+Đây **chính là việc bạn sẽ làm với mọi hệ thống công ty đưa xuống**: hiểu → khoanh vùng tùy biến → thêm năng lực cho đơn vị → kiểm → giữ đồng bộ. Bạn đã đi trọn từ "AI-Native là gì" đến "tự tay tùy biến một hệ thống".
+
+> Gợi mở: *Skill/định tuyến đầu tiên bạn sẽ thêm cho hệ thống thật của đơn vị là gì?*
+
+## ✅ Tự kiểm tra
+1. Bốn bước của quy trình "hiểu → thiết kế → tùy biến → kiểm"?
+2. Bạn đặt skill mới ở đâu và khai báo gì?
+3. Vùng nào là [CHUẨN] không nên đụng?
+4. Làm sao xác nhận tùy biến không phá lõi?
+
+---
+🏁 **Hoàn thành lộ trình 6 chặng.** Bạn giờ có thể *hiểu và tùy biến* một hệ agent được đưa xuống — đúng mục tiêu của khóa.
